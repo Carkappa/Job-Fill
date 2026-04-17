@@ -2,7 +2,7 @@
 
 Apply to jobs faster with intelligent form autofill and automation across multiple ATS platforms.
 
-✨ Features
+##✨ Features
 
 ⚡ Application Queue – Process multiple job applications automatically
 
@@ -19,7 +19,7 @@ Apply to jobs faster with intelligent form autofill and automation across multip
 📊 Activity Logs – Debug and track applications in real-time
 
 
-⚙️ Installation
+##⚙️ Installation
 # Clone the repo
 git clone https://github.com/your-username/jobfill-pro.git
 Open Chrome → chrome://extensions/
