@@ -1,30 +1,52 @@
 # JobFill Pro
 
-Apply to jobs faster with intelligent form autofill and automation across multiple ATS platforms.
+**Apply to jobs faster with intelligent form autofill and automation across major ATS platforms.**
 
-##✨ Features
+---
 
-⚡ Application Queue – Process multiple job applications automatically
+## Features
 
-📋 Smart Auto-Fill – Detects and fills 60+ field types
+| | |
+|---|---|
+| ⚡ **Application Queue** | Process multiple job applications automatically |
+| 📋 **Smart Auto-Fill** | Detects and fills 60+ field types across forms |
+| 📄 **Resume Upload** | Supports PDF, DOCX, DOC, TXT, and LaTeX |
+| 🧠 **ATS Detection** | Works across all major applicant tracking systems |
+| 🔄 **Multi-Step Navigation** | Handles "Next", "Continue", and complex form flows |
+| 🔒 **100% Local Storage** | Your data never leaves your browser |
+| 📊 **Activity Logs** | Debug and track applications in real time |
 
-📄 Resume Upload – Supports PDF, DOCX, DOC, TXT, LaTeX
+---
 
-🧠 ATS Detection – Works across major platforms
+## Installation
 
-🔄 Multi-Step Navigation – Handles “Next”, “Continue”, and form flows
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/jobfill-pro.git
+   ```
 
-🔒 100% Local Storage – Your data never leaves your browser
+2. Open Chrome and navigate to `chrome://extensions/`
 
-📊 Activity Logs – Debug and track applications in real-time
+3. Enable **Developer Mode** (toggle in the top-right corner)
 
+4. Click **Load Unpacked** and select the cloned project folder
 
-##⚙️ Installation
-# Clone the repo
-git clone https://github.com/your-username/jobfill-pro.git
-Open Chrome → chrome://extensions/
-Enable Developer Mode
-Click Load Unpacked
-Select the project folder
+You're ready to go. ✅
 
-✅ You’re ready to go.
+---
+
+## Usage
+
+> _Usage instructions coming soon._
+
+---
+
+## Contributing
+
+Pull requests are welcome. For major changes, please open an issue first to discuss what you'd like to change.
+
+---
+
+## License
+
+[MIT](LICENSE)
