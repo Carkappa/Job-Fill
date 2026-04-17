@@ -1,0 +1,46 @@
+{
+  "_instructions": "Fill in your details here, then import via Settings > Import Profile in the extension, OR paste directly into Chrome DevTools > Application > Local Storage > jobfill_profile.",
+
+  "firstName": "John",
+  "lastName": "Smith",
+  "email": "john.smith@example.com",
+  "phone": "+1 (555) 123-4567",
+
+  "address": "123 Main Street",
+  "city": "San Francisco",
+  "state": "CA",
+  "zip": "94102",
+  "country": "United States",
+
+  "linkedinUrl": "https://linkedin.com/in/johnsmith",
+  "githubUrl": "https://github.com/johnsmith",
+  "websiteUrl": "https://johnsmith.dev",
+
+  "currentTitle": "Software Engineer",
+  "currentCompany": "Acme Corporation",
+  "yearsExperience": "5",
+
+  "school": "University of California, Berkeley",
+  "degree": "Bachelor's Degree",
+  "major": "Computer Science",
+  "gpa": "3.8",
+  "graduationYear": "2019",
+
+  "workAuthorization": "Yes",
+  "expectedSalary": "$120,000",
+  "startDate": "2 weeks notice",
+
+  "summary": "Experienced software engineer with 5+ years building scalable web applications using React, Node.js, and cloud infrastructure. Passionate about clean architecture and developer experience.",
+
+  "coverLetter": "I am excited to apply for this opportunity. With my background in software engineering and a track record of delivering high-quality products, I am confident I would be a strong addition to your team. I look forward to discussing how my skills align with your goals.",
+
+  "referralSource": "LinkedIn",
+
+  "resumeFilename": "john_smith_resume.pdf",
+  "resumeData": null,
+
+  "enabled": true,
+  "autoNavigate": true,
+  "requireConfirmation": true,
+  "fillDelay": 100
+}

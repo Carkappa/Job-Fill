@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JobFill Pro — Icon Generator</title>
+  <style>
+    body { font-family: sans-serif; padding: 30px; background: #f5f5f5; }
+    h2 { margin-bottom: 8px; }
+    p  { color: #555; margin-bottom: 24px; font-size: 14px; }
+    .grid { display: flex; gap: 24px; flex-wrap: wrap; }
+    .item { text-align: center; }
+    canvas { display: block; border: 1px solid #ddd; background: #fff; border-radius: 6px; margin-bottom: 6px; }
+    .lbl { font-size: 11px; color: #444; }
+    .dl  { margin-top: 6px; font-size: 12px; background: #0a66c2; color: #fff; padding: 5px 12px; border-radius: 5px; cursor: pointer; display: inline-block; }
+  </style>
+</head>
+<body>
+  <h2>JobFill Pro — Icon Generator</h2>
+  <p>Click a "Download" button to save each PNG. Place all four files inside the <code>icons/</code> folder.</p>
+  <div class="grid" id="grid"></div>
+
+  <script>
+    function drawIcon(size) {
+      const c   = document.createElement('canvas');
+      c.width   = size;
+      c.height  = size;
+      const ctx = c.getContext('2d');
+      const r   = size * 0.18;
+
+      // Rounded background
+      const g = ctx.createLinearGradient(0, 0, size, size);
+      g.addColorStop(0, '#0a66c2');
+      g.addColorStop(1, '#003f8a');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(r, 0); ctx.lineTo(size - r, 0);
+      ctx.quadraticCurveTo(size, 0, size, r);
+      ctx.lineTo(size, size - r);
+      ctx.quadraticCurveTo(size, size, size - r, size);
+      ctx.lineTo(r, size);
+      ctx.quadraticCurveTo(0, size, 0, size - r);
+      ctx.lineTo(0, r);
+      ctx.quadraticCurveTo(0, 0, r, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Document icon
+      const pw = size * 0.52, ph = size * 0.60;
+      const px = (size - pw) / 2,  py = (size - ph) / 2;
+      const fold = pw * 0.28, cr = pw * 0.08;
+
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.beginPath();
+      ctx.moveTo(px + cr, py);
+      ctx.lineTo(px + pw - fold, py);
+      ctx.lineTo(px + pw, py + fold);
+      ctx.lineTo(px + pw, py + ph - cr);
+      ctx.quadraticCurveTo(px + pw, py + ph, px + pw - cr, py + ph);
+      ctx.lineTo(px + cr, py + ph);
+      ctx.quadraticCurveTo(px, py + ph, px, py + ph - cr);
+      ctx.lineTo(px, py + cr);
+      ctx.quadraticCurveTo(px, py, px + cr, py);
+      ctx.closePath();
+      ctx.fill();
+
+      // Folded corner shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.beginPath();
+      ctx.moveTo(px + pw - fold, py);
+      ctx.lineTo(px + pw, py + fold);
+      ctx.lineTo(px + pw - fold, py + fold);
+      ctx.closePath();
+      ctx.fill();
+
+      // Text lines (only on larger icons)
+      if (size >= 32) {
+        const lx = px + pw * 0.14, lw = pw * 0.58, lh = Math.max(1, ph * 0.07);
+        ctx.fillStyle = '#0a66c2';
+        [0.48, 0.60, 0.72].forEach(y => ctx.fillRect(lx, py + ph * y, lw, lh));
+      }
+
+      return c;
+    }
+
+    [16, 32, 48, 128].forEach(size => {
+      const canvas = drawIcon(size);
+      const item   = document.createElement('div');
+      item.className = 'item';
+
+      const lbl = document.createElement('div');
+      lbl.className = 'lbl';
+      lbl.textContent = `${size}×${size}`;
+
+      const dl = document.createElement('a');
+      dl.className   = 'dl';
+      dl.textContent = `⬇ Download icon${size}.png`;
+      dl.href        = canvas.toDataURL('image/png');
+      dl.download    = `icon${size}.png`;
+
+      item.appendChild(canvas);
+      item.appendChild(lbl);
+      item.appendChild(dl);
+      document.getElementById('grid').appendChild(item);
+    });
+  </script>
+</body>
+</html>

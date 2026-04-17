@@ -1,0 +1,16 @@
+/* content.css — Injected styles for JobFill Pro */
+
+/* Highlight auto-filled fields with a blue outline */
+.jobfill-filled {
+  outline: 2px solid rgba(10, 102, 194, 0.55) !important;
+  outline-offset: 2px !important;
+  background-color: rgba(10, 102, 194, 0.05) !important;
+  transition: outline 0.3s ease, background-color 0.3s ease !important;
+}
+
+/* Fade out after 4 s */
+.jobfill-filled-done {
+  outline: 2px solid transparent !important;
+  background-color: transparent !important;
+  transition: outline 1s ease, background-color 1s ease !important;
+}

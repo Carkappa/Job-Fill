@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JobFill Pro</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{width:420px;min-height:540px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;color:#1a1a1a;font-size:13px}
+
+    /* Header */
+    .hdr{background:linear-gradient(135deg,#0a66c2,#0041a8);padding:14px 18px;color:#fff;display:flex;align-items:center;justify-content:space-between}
+    .hdr-l{display:flex;align-items:center;gap:10px}
+    .hdr-logo{font-size:24px;line-height:1}
+    .hdr-title{font-size:17px;font-weight:800}
+    .hdr-sub{font-size:10px;opacity:.7;margin-top:1px}
+    .badge{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.2);padding:5px 11px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;cursor:default}
+    .dot{width:8px;height:8px;border-radius:50%;background:#90caf9;flex-shrink:0}
+    .dot.on{background:#69f0ae;box-shadow:0 0 6px #69f0ae}
+
+    /* Tabs */
+    .tabs{display:flex;background:#fff;border-bottom:2px solid #e8eaed}
+    .tab{flex:1;padding:9px 2px;border:none;background:none;cursor:pointer;font-size:10px;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:600;transition:.15s;white-space:nowrap}
+    .tab.active{color:#0a66c2;border-bottom-color:#0a66c2}
+    .tab:hover:not(.active){background:#f5f7fc;color:#333}
+
+    /* Panels */
+    .panel{display:none;padding:14px 15px;max-height:410px;overflow-y:auto}
+    .panel.active{display:block}
+
+    /* Form */
+    label{display:block;font-size:10px;font-weight:700;color:#606878;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
+    input[type=text],input[type=email],input[type=tel],input[type=url],
+    input[type=number],input[type=password],select,textarea{width:100%;padding:7px 10px;border:1px solid #d4d7e0;border-radius:7px;font-size:13px;color:#1a1a1a;background:#fff;transition:border .15s;outline:none}
+    input:focus,select:focus,textarea:focus{border-color:#0a66c2;box-shadow:0 0 0 3px rgba(10,102,194,.12)}
+    textarea{resize:vertical;min-height:66px;line-height:1.5}
+    .fg{margin-bottom:10px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+
+    /* Section titles */
+    .sec{font-size:10.5px;font-weight:800;color:#0a66c2;margin:14px 0 9px;padding-bottom:4px;border-bottom:1px solid #d8e6fb;text-transform:uppercase;letter-spacing:.6px}
+    .sec:first-child{margin-top:2px}
+
+    /* Alerts */
+    .alert{padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:10px;display:none;font-weight:500}
+    .ok{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
+    .err{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+    .info-box{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:9px 12px;border-radius:7px;font-size:12px;margin-bottom:10px;line-height:1.5}
+
+    /* Resume drop zone */
+    .drop{border:2px dashed #b8c5e0;border-radius:12px;padding:18px 16px;text-align:center;cursor:pointer;transition:.15s}
+    .drop:hover,.drop.over{border-color:#0a66c2;background:#f0f7ff}
+    .drop input{display:none}
+    .drop-ico{font-size:32px;margin-bottom:6px}
+    .drop-txt{font-size:12px;color:#666;line-height:1.7}
+    .drop-txt strong{color:#0a66c2}
+    .resume-info{background:#eff6ff;border-radius:8px;padding:10px 14px;margin-top:12px;display:none}
+    .resume-info-name{font-weight:700;color:#1e40af;font-size:13px}
+    .resume-info-meta{font-size:11px;color:#64748b;margin-top:2px}
+    .resume-clear{font-size:11px;color:#dc2626;cursor:pointer;text-decoration:underline;margin-top:5px;display:inline-block}
+
+    /* Toggles */
+    .tr{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f2f5}
+    .tr:last-child{border-bottom:none}
+    .tr-l .name{font-size:13px;font-weight:600;color:#222}
+    .tr-l .desc{font-size:11px;color:#94a3b8;margin-top:2px}
+    .tgl{position:relative;width:40px;height:22px;flex-shrink:0}
+    .tgl input{opacity:0;width:0;height:0;position:absolute}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#d1d5db;border-radius:22px;transition:.15s}
+    .slider::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+    .tgl input:checked+.slider{background:#0a66c2}
+    .tgl input:checked+.slider::before{transform:translateX(18px)}
+
+    /* Site box */
+    .site-box{background:#fff;border:1px solid #dde0e7;border-radius:9px;padding:11px 14px;margin-bottom:12px;display:none}
+    .site-name{font-weight:700;font-size:14px;color:#0a66c2}
+    .site-url{color:#94a3b8;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px}
+
+    /* IO buttons */
+    .io-row{display:flex;gap:8px;margin-bottom:8px}
+    .io-btn{flex:1;padding:8px;border:1.5px solid #d1d5db;background:#f8fafc;color:#374151;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:.15s;text-align:center}
+    .io-btn:hover{background:#e2e8f0}
+    .io-btn.danger{border-color:#fca5a5;color:#dc2626}
+    .io-btn.danger:hover{background:#fee2e2}
+
+    /* ── Queue Tab ── */
+    .queue-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .queue-stats{display:flex;gap:6px;flex-wrap:wrap}
+    .q-chip{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;white-space:nowrap}
+    .q-pending{background:#dbeafe;color:#1e40af}
+    .q-processing{background:#fef3c7;color:#92400e}
+    .q-done{background:#dcfce7;color:#166534}
+    .q-failed{background:#fee2e2;color:#991b1b}
+    .queue-controls{display:flex;gap:8px;margin-bottom:12px}
+    .qbtn{flex:1;padding:9px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;transition:.15s}
+    .qbtn-start{background:#16a34a;color:#fff}
+    .qbtn-start:hover{background:#15803d}
+    .qbtn-pause{background:#f59e0b;color:#fff}
+    .qbtn-pause:hover{background:#d97706}
+    .qbtn-clear{background:#f1f5f9;color:#334155;border:1px solid #cbd5e1}
+    .qbtn-clear:hover{background:#e2e8f0}
+    .queue-empty{text-align:center;padding:32px 20px;color:#94a3b8}
+    .queue-empty .q-ico{font-size:36px;margin-bottom:10px}
+    .queue-empty .q-tip{font-size:12px;line-height:1.7;max-width:280px;margin:0 auto}
+    .queue-empty .q-tip strong{color:#374151}
+    .job-list{display:flex;flex-direction:column;gap:8px}
+    .job-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:11px 13px;position:relative}
+    .job-card.processing{border-color:#f59e0b;background:#fffbeb}
+    .job-card.completed{border-color:#86efac;background:#f0fdf4}
+    .job-card.failed{border-color:#fca5a5;background:#fef2f2}
+    .jc-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+    .jc-info{flex:1;min-width:0}
+    .jc-title{font-weight:700;font-size:13px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .jc-company{font-size:11px;color:#64748b;margin-top:2px}
+    .jc-status{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px}
+    .jc-status.pending{color:#1e40af}
+    .jc-status.processing{color:#92400e}
+    .jc-status.completed{color:#166534}
+    .jc-status.failed{color:#991b1b}
+    .jc-msg{font-size:11px;color:#64748b;margin-top:5px;line-height:1.4}
+    .jc-msg.error{color:#991b1b}
+    .jc-actions{display:flex;gap:6px;margin-top:8px}
+    .jc-btn{padding:4px 10px;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;background:#f1f5f9;color:#334155;transition:.15s}
+    .jc-btn:hover{background:#e2e8f0}
+    .jc-btn.retry{background:#dbeafe;color:#1e40af}
+    .jc-btn.retry:hover{background:#bfdbfe}
+    .jc-btn.remove{background:#fee2e2;color:#dc2626}
+    .jc-btn.remove:hover{background:#fecaca}
+    .spin{display:inline-block;animation:sp .8s linear infinite}
+    @keyframes sp{to{transform:rotate(360deg)}}
+
+    /* Log tab */
+    .log-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .log-toolbar span{font-size:12px;color:#64748b}
+    .log-clear-btn{font-size:11px;color:#dc2626;cursor:pointer;background:none;border:none;font-weight:600;padding:2px 6px;border-radius:4px}
+    .log-clear-btn:hover{background:#fee2e2}
+    .log-list{display:flex;flex-direction:column;gap:4px}
+    .log-entry{padding:6px 10px;border-radius:7px;font-size:11.5px;line-height:1.4;display:flex;gap:8px;background:#fff;border:1px solid #f1f5f9}
+    .log-entry.success{background:#f0fdf4;border-color:#bbf7d0}
+    .log-entry.error{background:#fef2f2;border-color:#fecaca}
+    .log-entry.warn{background:#fffbeb;border-color:#fde68a}
+    .log-entry.info{background:#eff6ff;border-color:#bfdbfe}
+    .log-time{color:#94a3b8;font-size:10px;flex-shrink:0;margin-top:1px;white-space:nowrap}
+    .log-msg{color:#374151;word-break:break-word}
+    .log-icon{flex-shrink:0;font-size:12px}
+    .log-empty{text-align:center;color:#94a3b8;padding:30px 0;font-size:13px}
+
+    /* About */
+    .about-card{background:#fff;border-radius:10px;padding:14px;font-size:12px;line-height:1.8;color:#64748b;border:1px solid #e2e8f0}
+    .about-card strong{color:#374151}
+    .ats-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:8px}
+    .ats-chip{background:#eff6ff;color:#1e40af;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:600;text-align:center}
+
+    /* Footer */
+    .footer{padding:11px 15px;background:#fff;border-top:2px solid #e8eaed;display:flex;gap:9px;position:sticky;bottom:0;z-index:10}
+    .btn{flex:1;padding:10px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;transition:.15s}
+    .btn-save{background:#f1f5f9;color:#334155;border:1px solid #cbd5e1}
+    .btn-save:hover{background:#e2e8f0}
+    .btn-fill{background:linear-gradient(135deg,#0a66c2,#0041a8);color:#fff;flex:2;box-shadow:0 3px 12px rgba(10,102,194,.35)}
+    .btn-fill:hover{background:linear-gradient(135deg,#0051a2,#002d7a)}
+    .btn-fill:disabled{background:#94b8d0;box-shadow:none;cursor:not-allowed}
+
+    ::-webkit-scrollbar{width:4px}
+    ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:4px}
+  </style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-l">
+    <div class="hdr-logo">📋</div>
+    <div><div class="hdr-title">JobFill Pro</div><div class="hdr-sub">Auto Application Assistant</div></div>
+  </div>
+  <div class="badge"><div class="dot" id="statusDot"></div><span id="statusText">Checking…</span></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="profile">👤 Profile</button>
+  <button class="tab"        data-tab="work">💼 Work</button>
+  <button class="tab"        data-tab="resume">📄 Resume</button>
+  <button class="tab"        data-tab="queue">⚡ Queue <span id="queueBadge" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:2px"></span></button>
+  <button class="tab"        data-tab="settings">⚙️</button>
+  <button class="tab"        data-tab="log">🪵</button>
+</div>
+
+<!-- ══ PROFILE ══ -->
+<div class="panel active" id="tab-profile">
+  <div class="alert ok"  id="alertOk"></div>
+  <div class="alert err" id="alertErr"></div>
+  <div class="sec">Personal Information</div>
+  <div class="row">
+    <div class="fg"><label>First Name *</label><input type="text"  id="firstName"  placeholder="John"   autocomplete="given-name"></div>
+    <div class="fg"><label>Last Name *</label> <input type="text"  id="lastName"   placeholder="Smith"  autocomplete="family-name"></div>
+  </div>
+  <div class="fg"><label>Email *</label><input type="email" id="email" placeholder="john@example.com" autocomplete="email"></div>
+  <div class="row">
+    <div class="fg"><label>Phone</label><input type="tel" id="phone" placeholder="+1 (555) 000-0000" autocomplete="tel"></div>
+    <div class="fg"><label>Ext</label>  <input type="text" id="phoneExt" placeholder="123"></div>
+  </div>
+  <div class="sec">Account Credentials <span style="font-size:9px;font-weight:400;color:#94a3b8;text-transform:none">(for job-site login / create-account forms)</span></div>
+  <div class="fg">
+    <label>Account Password</label>
+    <input type="password" id="loginPassword" placeholder="Stored locally — never uploaded" autocomplete="new-password">
+    <div style="font-size:10px;color:#94a3b8;margin-top:3px">🔒 Saved only in your browser — used to auto-fill login &amp; sign-up forms on job sites.</div>
+  </div>
+  <div class="sec">Address</div>
+  <div class="fg"><label>Street</label><input type="text" id="address" placeholder="123 Main St" autocomplete="street-address"></div>
+  <div class="fg"><label>Apt / Suite</label><input type="text" id="address2" placeholder="Apt 4B" autocomplete="address-line2"></div>
+  <div class="row">
+    <div class="fg"><label>City</label> <input type="text" id="city"  placeholder="San Francisco" autocomplete="address-level2"></div>
+    <div class="fg"><label>State</label><input type="text" id="state" placeholder="CA"            autocomplete="address-level1"></div>
+  </div>
+  <div class="row">
+    <div class="fg"><label>ZIP</label>    <input type="text" id="zip"     placeholder="94102"         autocomplete="postal-code"></div>
+    <div class="fg"><label>Country</label><input type="text" id="country" placeholder="United States" autocomplete="country-name"></div>
+  </div>
+  <div class="sec">Online Presence</div>
+  <div class="fg"><label>LinkedIn URL</label><input type="url" id="linkedinUrl" placeholder="https://linkedin.com/in/you"></div>
+  <div class="row">
+    <div class="fg"><label>GitHub</label>   <input type="url" id="githubUrl"  placeholder="https://github.com/you"></div>
+    <div class="fg"><label>Portfolio</label><input type="url" id="websiteUrl" placeholder="https://yoursite.dev"></div>
+  </div>
+</div>
+
+<!-- ══ WORK ══ -->
+<div class="panel" id="tab-work">
+  <div class="sec">Current Position</div>
+  <div class="fg"><label>Job Title</label>          <input type="text"   id="currentTitle"    placeholder="Software Engineer"></div>
+  <div class="fg"><label>Company</label>             <input type="text"   id="currentCompany"  placeholder="Acme Corp"></div>
+  <div class="fg"><label>Years of Experience</label> <input type="number" id="yearsExperience" placeholder="5" min="0" max="50"></div>
+  <div class="fg"><label>Work History</label><textarea id="workHistory" placeholder="Auto-parsed work history entries will appear here. Each entry separated by blank line." style="min-height:120px"></textarea></div>
+  <div class="sec">Education</div>
+  <div class="fg"><label>School / University</label><input type="text" id="school" placeholder="UC Berkeley"></div>
+  <div class="fg">
+    <label>Highest Degree</label>
+    <select id="degree">
+      <option value="">— select —</option>
+      <option>High School Diploma / GED</option><option>Some College</option>
+      <option>Associate's Degree</option><option>Bachelor's Degree</option>
+      <option>Master's Degree</option><option>MBA</option>
+      <option>Ph.D.</option><option>J.D.</option><option>M.D.</option>
+      <option>Bootcamp / Certificate</option><option>Other</option>
+    </select>
+  </div>
+  <div class="row">
+    <div class="fg"><label>Major / Field</label><input type="text" id="major" placeholder="Computer Science"></div>
+    <div class="fg"><label>GPA</label>           <input type="text" id="gpa"   placeholder="3.8"></div>
+  </div>
+  <div class="fg"><label>Graduation Year</label><input type="number" id="graduationYear" placeholder="2020" min="1950" max="2035"></div>
+  <div class="sec">Application Details</div>
+  <div class="fg">
+    <label>Work Authorization</label>
+    <select id="workAuthorization">
+      <option value="Yes">Yes, authorized to work</option>
+      <option value="No">No, need sponsorship</option>
+      <option value="Will require sponsorship">Will require sponsorship</option>
+    </select>
+  </div>
+  <div class="row">
+    <div class="fg"><label>Expected Salary</label><input type="text" id="expectedSalary" placeholder="$120,000"></div>
+    <div class="fg"><label>Start Date</label>      <input type="text" id="startDate"      placeholder="2 weeks"></div>
+  </div>
+  <div class="fg"><label>Skills</label><input type="text" id="skills" placeholder="JavaScript, React, Python…"></div>
+  <div class="row">
+    <div class="fg"><label>Languages</label>      <input type="text" id="languages"     placeholder="English, Spanish"></div>
+    <div class="fg"><label>Certifications</label> <input type="text" id="certifications" placeholder="AWS, PMP…"></div>
+  </div>
+  <div class="fg"><label>Summary</label><textarea id="summary" placeholder="2–3 sentence professional bio…"></textarea></div>
+  <div class="fg"><label>Cover Letter</label><textarea id="coverLetter" placeholder="Dear Hiring Manager…" style="min-height:80px"></textarea></div>
+  <div class="fg"><label>How Did You Hear About Us</label><input type="text" id="referralSource" placeholder="LinkedIn…"></div>
+  <div class="sec">EEO (Optional)</div>
+  <div class="row">
+    <div class="fg"><label>Gender</label>
+      <select id="gender"><option value="">— skip —</option><option>Male</option><option>Female</option><option>Non-binary</option><option>Prefer not to say</option></select>
+    </div>
+    <div class="fg"><label>Ethnicity</label>
+      <select id="ethnicity"><option value="">— skip —</option><option>White</option><option>Hispanic or Latino</option><option>Black or African American</option><option>Asian</option><option>Two or more races</option><option>Prefer not to say</option></select>
+    </div>
+  </div>
+  <div class="row">
+    <div class="fg"><label>Veteran</label>
+      <select id="veteranStatus"><option value="">— skip —</option><option>I am not a veteran</option><option>I am a veteran</option><option>Prefer not to say</option></select>
+    </div>
+    <div class="fg"><label>Disability</label>
+      <select id="disabilityStatus"><option value="">— skip —</option><option>No, I do not have a disability</option><option>Yes, I have a disability</option><option>Prefer not to say</option></select>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- ══ RESUME ══ -->
+  <div class="panel" id="tab-resume">
+    <div class="sec">Upload Resume</div>
+    <div class="drop" id="resumeDrop">
+      <div class="drop-ico">📎</div>
+      <div class="drop-txt">Drop a PDF / DOCX / TXT file here, or <strong>click to choose</strong>.<br><span style="font-size:11px;color:#94a3b8">Resume will be stored locally in your browser and only used to auto-attach when a job site asks for it.</span></div>
+      <input type="file" id="resumeFile" accept=".pdf,.doc,.docx,.txt,.tex">
+    </div>
+    <div class="resume-info" id="resumeInfo">
+      <div class="resume-info-name" id="resumeName"></div>
+      <div class="resume-info-meta" id="resumeMeta"></div>
+      <a id="resumeClear" class="resume-clear">Remove resume</a>
+    </div>
+  </div>
+
+
+
+<!-- ══ QUEUE ══ -->
+<div class="panel" id="tab-queue">
+  <div class="queue-header">
+    <div class="queue-stats" id="queueStats">
+      <span class="q-chip q-pending" id="statPending" style="display:none"></span>
+      <span class="q-chip q-processing" id="statProcessing" style="display:none"></span>
+      <span class="q-chip q-done" id="statDone" style="display:none"></span>
+      <span class="q-chip q-failed" id="statFailed" style="display:none"></span>
+    </div>
+  </div>
+  <div class="queue-controls">
+    <button class="qbtn qbtn-start"  id="qStart">▶ Start Queue</button>
+    <button class="qbtn qbtn-pause"  id="qPause">⏸ Pause</button>
+    <button class="qbtn qbtn-clear"  id="qClear">🗑 Clear Done</button>
+  </div>
+  <div class="info-box">
+    <strong>How to batch apply:</strong> On any LinkedIn jobs page, click the <strong style="color:#00875a">⚡ Queue Apply</strong> button that JobFill adds next to each Easy Apply button. Jobs queue up here and are processed one by one in background tabs — you get a Chrome notification for each result.
+  </div>
+  <div id="queueBody"></div>
+</div>
+
+<!-- ══ SETTINGS ══ -->
+<div class="panel" id="tab-settings">
+  <div class="site-box" id="siteBox">
+    <div style="font-size:10px;color:#94a3b8;margin-bottom:3px;font-weight:700;text-transform:uppercase">Currently on</div>
+    <div class="site-name" id="siteName">—</div>
+    <div class="site-url"  id="siteUrl">—</div>
+  </div>
+  <div class="sec">Autofill Behaviour</div>
+  <div class="tr">
+    <div class="tr-l"><div class="name">Enable AutoFill</div><div class="desc">Activate on all supported job sites</div></div>
+    <label class="tgl"><input type="checkbox" id="enabled" checked><span class="slider"></span></label>
+  </div>
+  <div class="tr">
+    <div class="tr-l"><div class="name">Auto-Navigate Steps</div><div class="desc">Click Next/Continue automatically</div></div>
+    <label class="tgl"><input type="checkbox" id="autoNavigate" checked><span class="slider"></span></label>
+  </div>
+  <div class="tr">
+    <div class="tr-l"><div class="name">Require Confirmation</div><div class="desc">Confirm dialog before manual submit</div></div>
+    <label class="tgl"><input type="checkbox" id="requireConfirmation" checked><span class="slider"></span></label>
+  </div>
+  <div class="sec">Timing</div>
+  <div class="fg"><label>Fill Delay between fields (ms)</label><input type="number" id="fillDelay" value="80" min="0" max="2000"></div>
+  <div class="sec">Profile Import / Export</div>
+  <div class="io-row">
+    <label class="io-btn" for="importFile">⬆ Import JSON</label>
+    <input type="file" id="importFile" accept=".json" style="display:none">
+    <button class="io-btn" id="exportBtn">⬇ Export JSON</button>
+  </div>
+  <div class="io-row">
+    <button class="io-btn danger" id="clearDataBtn">🗑 Clear All Data</button>
+  </div>
+  <div class="sec">About</div>
+  <div class="about-card">
+    <strong>JobFill Pro v1.1.0</strong><br>
+    Supports: LinkedIn · Workday · Greenhouse · Lever · Oracle Taleo · iCIMS · Indeed · Jobvite · SmartRecruiters<br><br>
+    ⚡ New: Batch apply via background queue with per-job notifications.<br>
+    🔒 All data stored locally — never uploaded to any server.
+  </div>
+</div>
+
+<!-- ══ LOG ══ -->
+<div class="panel" id="tab-log">
+  <div class="log-toolbar">
+    <span>Recent activity</span>
+    <button class="log-clear-btn" id="logClearBtn">Clear</button>
+  </div>
+  <div class="log-list" id="logList">
+    <div class="log-empty" id="logEmpty">No activity yet.</div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <button class="btn btn-save" id="btnSave">💾 Save</button>
+  <button class="btn btn-fill" id="btnFill" disabled>▶ Fill Application</button>
+</div>
+
+<script src="resumeParser.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
