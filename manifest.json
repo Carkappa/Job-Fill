@@ -26,7 +26,10 @@
     "https://apply.indeed.com/*",
     "https://*.indeed.com/*",
     "https://*.jobvite.com/*",
-    "https://*.smartrecruiters.com/*"
+    "https://*.smartrecruiters.com/*",
+    "https://*.oraclecloud.com/*",
+    "https://apply.oracle.com/*",
+    "https://*.oracle.com/*"
   ],
 
   "content_scripts": [
@@ -45,7 +48,11 @@
         "https://www.indeed.com/viewjob*",
         "https://apply.indeed.com/*",
         "https://*.jobvite.com/careers*",
-        "https://*.smartrecruiters.com/*"
+        "https://*.smartrecruiters.com/*",
+        "https://*.oraclecloud.com/*",
+        "https://apply.oracle.com/*",
+        "https://*.oracle.com/*/careers/*",
+        "https://*.oracle.com/*/jobs/*"
       ],
       "js": ["utils.js", "contentScript.js"],
       "css": ["content.css"],

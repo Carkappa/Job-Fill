@@ -23,6 +23,7 @@ const JOB_PATTERNS = [
   /greenhouse\.io/, /lever\.co/, /taleo\.net/, /icims\.com/,
   /indeed\.com\/(viewjob|apply)/, /apply\.indeed\.com/,
   /jobvite\.com/, /smartrecruiters\.com/,
+  /oraclecloud\.com/, /apply\.oracle\.com/,
 ];
 
 // Notification ID → job URL map (in-memory; lost on SW restart but that's acceptable)

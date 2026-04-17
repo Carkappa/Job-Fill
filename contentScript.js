@@ -138,104 +138,183 @@ class FormFiller {
     this.log          = [];
   }
 
+  // ── Resolve the value to fill for a given fieldType / pattern ──────────────
+  _resolveValue(fieldType, pat) {
+    let value = this.profile[pat.profileKey];
+
+    if (!value && this.profile.positions?.length) {
+      const latest = this.profile.positions[0];
+      if (fieldType === 'currentTitle')   value = latest.title;
+      if (fieldType === 'currentCompany') value = latest.company;
+      if (fieldType === 'workHistory') {
+        value = this.profile.positions.map(p => {
+          const range = [p.startDate, p.endDate].filter(Boolean).join(' – ');
+          const lines = [`${p.title} at ${p.company}${range ? ` (${range})` : ''}`];
+          if (p.description) lines.push(p.description);
+          return lines.join('\n');
+        }).join('\n\n');
+      }
+    }
+
+    if (fieldType === 'fullName' && !value)
+      value = [this.profile.firstName, this.profile.lastName].filter(Boolean).join(' ');
+    if (fieldType === 'phone'       && value) value = Normalizers.phone(value);
+    if (fieldType === 'coverLetter' && value)
+      value = Normalizers.coverLetter(value, this.jobInfo?.title, this.jobInfo?.company);
+    if (['veteran','disability','gender','ethnicity'].includes(fieldType) && !value)
+      value = 'Prefer not to say';
+    if (fieldType === 'referral' && !value) value = 'LinkedIn';
+
+    return value ?? null;
+  }
+
+  // ── Fill a single specific field (used when fixing error-highlighted fields) ─
+  async fillField(f) {
+    f._jfDone = false; // allow re-fill even if already processed
+
+    const r = f.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return false;
+
+    // agreeToTerms checkbox
+    const type = (f.getAttribute('type') || '').toLowerCase();
+    if (type === 'checkbox') {
+      const lbl = FieldMatcher.getLabelText(f).toLowerCase();
+      if (/agree|accept|terms|condition|privacy|consent|certify/.test(lbl) && !f.checked) {
+        f.checked = true;
+        f.dispatchEvent(new Event('change', { bubbles: true }));
+        this.filledCount++;
+      }
+      return true;
+    }
+
+    const match = FieldMatcher.matchElement(f);
+    if (!match) {
+      Logger.warn(`[fix] no match for: ${f.name || f.id || FieldMatcher.getLabelText(f)}`);
+      return false;
+    }
+
+    const { fieldType } = match;
+    const pat = FIELD_PATTERNS[fieldType];
+    if (!pat) return false;
+
+    if (fieldType === 'agreeToTerms') {
+      if (!f.checked) { f.checked = true; f.dispatchEvent(new Event('change', { bubbles: true })); }
+      f._jfDone = true; this.filledCount++; return true;
+    }
+
+    if (fieldType === 'sponsorship') {
+      const v = (this.profile.workAuthorization === 'Yes') ? 'No' : 'Yes';
+      const ok = await this._fill(f, 'workAuth', v);
+      if (ok) { f._jfDone = true; f.classList?.add('jobfill-filled'); this.filledCount++; }
+      return ok;
+    }
+
+    const value = this._resolveValue(fieldType, pat);
+    if (!value) {
+      Logger.warn(`[fix] no value for fieldType=${fieldType}`);
+      return false;
+    }
+
+    const ok = await this._fill(f, fieldType, String(value));
+    if (ok) {
+      f._jfDone = true;
+      f.classList?.add('jobfill-filled');
+      this.filledCount++;
+      Logger.success(`[fix][${fieldType}] "${String(value).slice(0, 50)}"`);
+      setTimeout(() => f.classList?.replace('jobfill-filled', 'jobfill-filled-done'), 4000);
+    }
+    return ok;
+  }
+
+  // ── Fill all visible fields top-to-bottom (used for create-account forms) ───
   async fillAllFields(root = document) {
-    const fields = DOMUtils.getInteractableFields(root);
-    Logger.info(`Scanning ${fields.length} fields`);
+    await RetryUtils.sleep(400);
+
+    const fields = DOMUtils.getInteractableFields(root).sort((a, b) => {
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      const rowDiff = Math.round(ra.top) - Math.round(rb.top);
+      return rowDiff !== 0 ? rowDiff : ra.left - rb.left;
+    });
+
+    Logger.info(`Scanning ${fields.length} fields (top→bottom)`);
+    let filled = 0;
 
     for (const f of fields) {
       if (f._jfDone) continue;
+      const r = f.getBoundingClientRect(), s = window.getComputedStyle(f);
+      if (r.width === 0 || r.height === 0 || s.display === 'none' ||
+          s.visibility === 'hidden' || s.opacity === '0') { this.skippedCount++; continue; }
+
       const match = FieldMatcher.matchElement(f);
       if (!match) { this.skippedCount++; continue; }
-
       const { fieldType } = match;
       const pat = FIELD_PATTERNS[fieldType];
       if (!pat) continue;
 
-      // ── Auto-agree to terms checkboxes ────────────────────────────────────
       if (fieldType === 'agreeToTerms') {
-        const type = (f.getAttribute('type') || '').toLowerCase();
-        if (type === 'checkbox' && !f.checked) {
-          f.checked = true;
-          f.dispatchEvent(new Event('change', { bubbles: true }));
-          f._jfDone = true;
-          this.filledCount++;
-          Logger.success('[agreeToTerms] auto-checked');
+        if ((f.getAttribute('type') || '') === 'checkbox' && !f.checked) {
+          f.checked = true; f.dispatchEvent(new Event('change', { bubbles: true }));
+          f._jfDone = true; this.filledCount++;
         }
         continue;
       }
 
-      // ── Visa sponsorship (reverse of workAuthorization) ───────────────────
       if (fieldType === 'sponsorship') {
-        // "Do you require sponsorship?" → Yes authorized = No sponsorship needed
-        const sponsorValue = (this.profile.workAuthorization === 'Yes' || this.profile.workAuthorization === 'true') ? 'No' : 'Yes';
-        const ok = await this._fill(f, 'workAuth', sponsorValue);
-        if (ok) { f._jfDone = true; f.classList?.add('jobfill-filled'); this.filledCount++; }
-        await RetryUtils.sleep(this.profile.fillDelay ?? 80);
-        continue;
+        const v = (this.profile.workAuthorization === 'Yes') ? 'No' : 'Yes';
+        const ok = await this._fill(f, 'workAuth', v);
+        if (ok) { f._jfDone = true; f.classList?.add('jobfill-filled'); this.filledCount++; filled++; }
+        await RetryUtils.sleep(this._delay(filled)); continue;
       }
 
-      let value = this.profile[pat.profileKey];
-      if (fieldType === 'fullName' && !value)
-        value = [this.profile.firstName, this.profile.lastName].filter(Boolean).join(' ');
-      if (fieldType === 'phone' && value) value = Normalizers.phone(value);
-      if (fieldType === 'coverLetter' && value) value = Normalizers.coverLetter(value, this.jobInfo?.title, this.jobInfo?.company);
-
-      // ── EEO fields: fall back to "prefer not to say" if profile is empty ─
-      if ((fieldType === 'veteran' || fieldType === 'disability' || fieldType === 'gender' || fieldType === 'ethnicity') && !value) {
-        value = 'Prefer not to say';
-      }
-
-      // ── Referral source: try multiple fallbacks ───────────────────────────
-      if (fieldType === 'referral' && !value) value = 'LinkedIn';
-
-      if (value === undefined || value === null || value === '') { this.skippedCount++; continue; }
+      const value = this._resolveValue(fieldType, pat);
+      if (!value) { this.skippedCount++; continue; }
 
       const ok = await this._fill(f, fieldType, String(value));
       if (ok) {
-        f._jfDone = true;
-        f.classList?.add('jobfill-filled');
-        this.filledCount++;
+        f._jfDone = true; f.classList?.add('jobfill-filled');
+        this.filledCount++; filled++;
         this.log.push({ fieldType, value: String(value).slice(0, 60) });
         Logger.success(`[${fieldType}] "${String(value).slice(0, 50)}"`);
         setTimeout(() => f.classList?.replace('jobfill-filled', 'jobfill-filled-done'), 4000);
       }
-      await RetryUtils.sleep(this.profile.fillDelay ?? 80);
+      await RetryUtils.sleep(this._delay(filled));
     }
+  }
+
+  _delay(n) {
+    const base = this.profile.fillDelay ?? 80;
+    if (n < 2)  return Math.max(base, 500);
+    if (n < 5)  return Math.max(base, 250);
+    if (n < 10) return Math.max(base, 120);
+    return base;
   }
 
   async _fill(el, fieldType, value) {
     try {
       const tag  = el.tagName.toLowerCase();
       const type = (el.getAttribute('type') || 'text').toLowerCase();
-
       if (tag === 'select') {
-        // For referral fields, try multiple common values if first doesn't match
         if (fieldType === 'referral') return this._fillReferral(el);
         return EventUtils.selectOption(el, value);
       }
-      if (type === 'radio') return EventUtils.selectRadio(el.name, value);
-      if (type === 'file')  return false;
+      if (type === 'radio')    return EventUtils.selectRadio(el.name, value);
+      if (type === 'file')     return false;
       if (type === 'checkbox') {
         const should = ['yes','true','1','checked'].includes(value.toLowerCase());
         if (el.checked !== should) { el.checked = should; el.dispatchEvent(new Event('change', { bubbles: true })); }
         return true;
       }
-      if (type === 'date') return EventUtils.setDate(el, value);
-      if (type === 'password') {
-        // Fill password without clearing first to avoid triggering validation
+      if (type === 'date')     return EventUtils.setDate(el, value);
+      if (tag === 'input' || tag === 'textarea' || type === 'password')
         return EventUtils.setValue(el, value);
-      }
-      if (tag === 'input' || tag === 'textarea') {
-        EventUtils.setValue(el, ''); await RetryUtils.sleep(25); return EventUtils.setValue(el, value);
-      }
       if (el.isContentEditable) {
-        el.focus(); document.execCommand('selectAll', false, null); document.execCommand('insertText', false, value); return true;
+        el.focus(); document.execCommand('selectAll', false, null);
+        document.execCommand('insertText', false, value); return true;
       }
     } catch (e) { Logger.error(`_fill[${fieldType}]`, e); }
     return false;
   }
 
-  // Try a prioritised list of referral source values against the select options
   _fillReferral(sel) {
     const candidates = [
       this.profile.referralSource,
@@ -243,9 +322,7 @@ class FormFiller {
       'Online Job Board','Indeed','ZipRecruiter','Glassdoor','Monster',
       'Career Website','Career website','Company Website','Internet','Online','Other',
     ].filter(Boolean);
-    for (const c of candidates) {
-      if (EventUtils.selectOption(sel, c)) return true;
-    }
+    for (const c of candidates) { if (EventUtils.selectOption(sel, c)) return true; }
     return false;
   }
 }
@@ -270,6 +347,56 @@ class WorkdayDropdowns {
       for (const opt of options) {
         const t = opt.textContent.toLowerCase().trim();
         if (t === norm || t.includes(norm) || norm.includes(t)) { EventUtils.simulateClick(opt); break; }
+      }
+      await RetryUtils.sleep(200);
+    }
+  }
+}
+
+// ─── Oracle Cloud JET Custom Dropdowns ───────────────────────────────────────
+class OracleCloudDropdowns {
+  static async fill(profile) {
+    // Oracle JET uses [data-oj-component="ojSelect"] or [role="combobox"] wrappers
+    const ctrs = document.querySelectorAll(
+      '[data-oj-component="ojSelect"]:not([data-jf-dd]),' +
+      '[data-oj-component="ojCombobox"]:not([data-jf-dd]),' +
+      '[class*="oj-select"]:not([data-jf-dd]):not(option)'
+    );
+    for (const ctr of ctrs) {
+      const match = FieldMatcher.matchElement(ctr);
+      if (!match) continue;
+      const pat = FIELD_PATTERNS[match.fieldType];
+      if (!pat) continue;
+
+      // Resolve state variants (TX ↔ Texas)
+      let value = profile[pat.profileKey];
+      if (match.fieldType === 'state' && value) value = Normalizers.stateVariants(value)[0] || value;
+      if (!value) continue;
+
+      ctr.setAttribute('data-jf-dd', '1');
+      // Click to open the OJet dropdown
+      const input = ctr.querySelector('input[role="combobox"],input[type="text"]');
+      if (input) {
+        EventUtils.setValue(input, value);
+        input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+        await RetryUtils.sleep(400);
+      } else {
+        EventUtils.simulateClick(ctr);
+        await RetryUtils.sleep(400);
+      }
+
+      // Pick matching option from the popup list
+      const options = document.querySelectorAll(
+        '[data-oj-item],[role="option"],[class*="oj-listbox-result"]'
+      );
+      const norm = String(value).toLowerCase().trim();
+      const stateVars = Normalizers.stateVariants(value);
+      for (const opt of options) {
+        const t = opt.textContent.toLowerCase().trim();
+        if (t === norm || stateVars.some(v => t === v || t.includes(v))) {
+          EventUtils.simulateClick(opt);
+          break;
+        }
       }
       await RetryUtils.sleep(200);
     }
@@ -388,42 +515,67 @@ function showToast(msg, type = 'info', ms = 4000) {
 // ─── LinkedIn Job Queue Injector ──────────────────────────────────────────────
 // Injects "⚡ Queue Apply" buttons next to Easy Apply buttons on LinkedIn listings.
 class LinkedInQueueInjector {
-  constructor() { this._injected = new Set(); }
+  constructor() { this._injected = new Set(); this._obs = null; }
 
   start() {
     this._scan();
-    // Re-scan when LinkedIn lazy-loads more job cards
-    new MutationObserver(() => this._scan())
-      .observe(document.body, { childList: true, subtree: true });
+    // Debounced re-scan when LinkedIn lazy-loads more job cards
+    let _t;
+    this._obs = new MutationObserver(() => { clearTimeout(_t); _t = setTimeout(() => this._scan(), 400); });
+    this._obs.observe(document.body, { childList: true, subtree: true });
   }
 
   _scan() {
-    const easyApplyBtns = document.querySelectorAll(
-      'button[aria-label*="Easy Apply" i]:not([data-jf-qi]), ' +
-      '.jobs-apply-button--top-card:not([data-jf-qi])'
-    );
+    // Multiple selector variants — LinkedIn changes these regularly
+    const easyApplyBtns = document.querySelectorAll([
+      'button[aria-label*="Easy Apply" i]:not([data-jf-qi])',
+      '.jobs-apply-button--top-card:not([data-jf-qi])',
+      '.jobs-s-apply button:not([data-jf-qi])',
+      '[class*="easy-apply"]:not([data-jf-qi]) button',
+      'button[data-job-id]:not([data-jf-qi])',
+      'button[class*="jobs-apply"]:not([data-jf-qi])',
+    ].join(', '));
     for (const btn of easyApplyBtns) this._inject(btn);
   }
 
   _inject(eaBtn) {
     const jobId = this._jobId(eaBtn);
     if (!jobId || this._injected.has(jobId)) return;
+
+    // Verify it's actually an Easy Apply button (not a "View" or "Save" button)
+    const btnText = (eaBtn.textContent || eaBtn.getAttribute('aria-label') || '').toLowerCase();
+    if (!/easy apply|apply|quick apply/.test(btnText) && !eaBtn.querySelector('[class*="easy-apply"]')) {
+      // Check if there's a sibling Easy Apply button nearby instead of skipping
+      const parent = eaBtn.parentElement;
+      if (parent) {
+        const sibling = parent.querySelector('button[aria-label*="Easy Apply" i]');
+        if (sibling && sibling !== eaBtn) { this._inject(sibling); return; }
+      }
+      return;
+    }
+
     this._injected.add(jobId);
     eaBtn.setAttribute('data-jf-qi', '1');
 
-    const card    = eaBtn.closest('[data-job-id],[data-occludable-job-id],.job-card-container,.jobs-unified-top-card');
-    const title   = this._text(card, '.job-card-list__title,.jobs-unified-top-card__job-title,[class*="jobTitle"],[class*="job-title"]') || 'Position';
-    const company = this._text(card, '.job-card-container__company-name,.jobs-unified-top-card__company-name,[class*="companyName"],[class*="company-name"]') || '';
+    const card    = eaBtn.closest('[data-job-id],[data-occludable-job-id],.job-card-container,.jobs-unified-top-card,.job-details-jobs-unified-top-card');
+    const title   = this._text(card,
+      'h1,.job-card-list__title,.jobs-unified-top-card__job-title,[class*="jobTitle"],[class*="job-title"],h2[class*="title"]'
+    ) || document.querySelector('h1')?.textContent?.trim() || 'Position';
+    const company = this._text(card,
+      '.job-card-container__company-name,.jobs-unified-top-card__company-name,[class*="companyName"],[class*="company-name"],a[class*="company"]'
+    ) || '';
     const applyUrl = `https://www.linkedin.com/jobs/view/${jobId}/`;
 
     const qBtn = document.createElement('button');
     qBtn.textContent = '⚡ Queue Apply';
     qBtn.title = `Add to JobFill queue: ${title}`;
+    qBtn.setAttribute('data-jf-qbtn', jobId);
     qBtn.style.cssText = [
-      'margin-left:8px', 'padding:6px 14px', 'background:#00875a', 'color:#fff',
-      'border:none', 'border-radius:20px', 'font-size:13px', 'cursor:pointer',
-      'font-weight:700', 'font-family:inherit', 'transition:background .15s',
-      'vertical-align:middle', 'white-space:nowrap',
+      'margin-left:8px','padding:6px 14px','background:#00875a','color:#fff',
+      'border:none','border-radius:20px','font-size:13px','cursor:pointer',
+      'font-weight:700','font-family:inherit','transition:background .15s',
+      'vertical-align:middle','white-space:nowrap','line-height:1.4',
+      'flex-shrink:0',
     ].join(';');
 
     qBtn.addEventListener('mouseenter', () => {
@@ -437,7 +589,6 @@ class LinkedInQueueInjector {
       e.stopPropagation(); e.preventDefault();
 
       if (qBtn._queued) {
-        // Toggle off — remove from queue
         await chrome.runtime.sendMessage({ type: 'REMOVE_FROM_QUEUE', jobId });
         qBtn._queued = false;
         qBtn.textContent = '⚡ Queue Apply';
@@ -456,29 +607,53 @@ class LinkedInQueueInjector {
         qBtn.style.background = res?.added ? '#15803d' : '#dc2626';
         qBtn.title = 'Click to remove from queue';
         if (res?.added) showToast(`"${title}" added to queue`, 'success', 2500);
-        else showToast(`"${title}" is already queued — click ✕ to remove`, 'info', 3000);
+        else showToast(`"${title}" already queued — click ✕ to remove`, 'info', 3000);
       }
     });
 
-    // Insert right after the Easy Apply button
     eaBtn.insertAdjacentElement('afterend', qBtn);
   }
 
   _jobId(btn) {
-    const card = btn.closest('[data-job-id],[data-occludable-job-id]');
-    if (card) return card.getAttribute('data-job-id') || card.getAttribute('data-occludable-job-id');
-    const m = location.pathname.match(/\/jobs\/view\/(\d+)/);
-    return m?.[1] || null;
+    // 1. data attribute on button itself
+    const direct = btn.getAttribute('data-job-id') || btn.getAttribute('data-occludable-job-id');
+    if (direct) return direct;
+
+    // 2. data attribute on ancestor card
+    const card = btn.closest('[data-job-id],[data-occludable-job-id],[data-entity-urn]');
+    if (card) {
+      const fromAttr = card.getAttribute('data-job-id') || card.getAttribute('data-occludable-job-id');
+      if (fromAttr) return fromAttr;
+      // Extract from entity URN: "urn:li:jobPosting:1234567890"
+      const urn = card.getAttribute('data-entity-urn') || '';
+      const urnMatch = urn.match(/:(\d{6,})/);
+      if (urnMatch) return urnMatch[1];
+    }
+
+    // 3. Current page URL
+    const urlMatch = location.pathname.match(/\/jobs\/view\/(\d+)/);
+    if (urlMatch) return urlMatch[1];
+
+    // 4. Search param
+    const sp = new URLSearchParams(location.search).get('currentJobId');
+    if (sp) return sp;
+
+    return null;
   }
 
   _text(root, sel) {
-    return root?.querySelector(sel)?.textContent?.trim() || null;
+    if (!root) return null;
+    for (const s of sel.split(',')) {
+      const el = root.querySelector(s.trim());
+      const t  = el?.textContent?.trim();
+      if (t) return t;
+    }
+    return null;
   }
 }
 
 // ─── Login / Account Creation Filler ─────────────────────────────────────────
 class LoginFiller {
-  // Returns true if the page appears to be a login or sign-up form
   static isPresent() {
     const hasPwd = !!document.querySelector('input[type="password"]');
     if (!hasPwd) return false;
@@ -486,37 +661,56 @@ class LoginFiller {
     return /sign in|log in|login|create account|sign up|register|new account|join us/.test(pageText);
   }
 
+  static isCreateAccount() {
+    const t = document.body.textContent.toLowerCase();
+    return /create account|sign up|register|new account|join us|create profile/.test(t) &&
+           !/^sign in|^log in/.test(t.trim().slice(0, 60));
+  }
+
   static async fill(profile) {
     if (!profile.email) return false;
     const pwdInput = document.querySelector('input[type="password"]');
     if (!pwdInput) return false;
 
-    // Find email / username field (near the password input)
     const form = pwdInput.closest('form') || document.body;
+
+    // On create-account forms: fill ALL profile fields first (first name, last name, phone, etc.)
+    // This fixes "create account didn't work" because required fields were left empty.
+    if (LoginFiller.isCreateAccount()) {
+      Logger.info('[createAccount] Filling all profile fields on create-account form…');
+      const filler = new FormFiller(profile, {});
+      await filler.fillAllFields(form);
+      await RetryUtils.sleep(300);
+    }
+
+    // Explicitly fill email and password (may have already been filled above, but ensure it)
     const emailInput =
       form.querySelector('input[type="email"]') ||
       form.querySelector('input[autocomplete*="email"]') ||
       form.querySelector('input[name*="email" i], input[id*="email" i]') ||
       form.querySelector('input[name*="user" i], input[id*="user" i]') ||
-      form.querySelector('input[type="text"]');
+      form.querySelector('input[type="text"]:not([type="password"])');
 
     if (emailInput && emailInput !== pwdInput) {
       EventUtils.setValue(emailInput, profile.email);
-      await RetryUtils.sleep(200);
-      Logger.success(`[login] email filled: ${profile.email}`);
+      await RetryUtils.sleep(150);
     }
 
-    if (profile.loginPassword) {
-      EventUtils.setValue(pwdInput, profile.loginPassword);
-      await RetryUtils.sleep(200);
-      Logger.success('[login] password filled');
+    // Fill both password fields (password + confirm password)
+    const allPwdInputs = form.querySelectorAll('input[type="password"]');
+    for (const pi of allPwdInputs) {
+      if (profile.loginPassword) {
+        EventUtils.setValue(pi, profile.loginPassword);
+        await RetryUtils.sleep(100);
+      }
     }
+    Logger.success('[login] credentials filled');
 
-    // Auto-check "I agree to terms" checkboxes on the same form
-    const checkboxes = form.querySelectorAll('input[type="checkbox"]');
-    for (const cb of checkboxes) {
+    // Auto-check terms/privacy checkboxes
+    for (const cb of form.querySelectorAll('input[type="checkbox"]')) {
       const lbl = FieldMatcher.getLabelText(cb).toLowerCase();
-      if (/agree|accept|terms|condition|privacy|consent|certify|acknowledge/.test(lbl)) {
+      if (/agree|accept|terms|condition|privacy|consent|certify|acknowledge/.test(lbl) &&
+          !/marketing|newsletter|promo/.test(lbl)) {
         if (!cb.checked) {
           cb.checked = true;
           cb.dispatchEvent(new Event('change', { bubbles: true }));
@@ -525,14 +719,14 @@ class LoginFiller {
       }
     }
 
-    // Auto-click Create Account / Sign Up submit button if present
+    // Click Create Account / Sign Up / Continue
     const submitBtn = DOMUtils.findNavButton([
       'create account','sign up','register','create my account',
-      'join','get started','continue','next',
+      'join','get started','continue','next','create',
     ]);
     if (submitBtn) {
       Logger.info(`[login] clicking: "${(submitBtn.textContent || '').trim()}"`);
-      await RetryUtils.sleep(400);
+      await RetryUtils.sleep(500);
       EventUtils.simulateClick(submitBtn);
     }
 
@@ -593,56 +787,114 @@ class AutofillController {
   async _batchRun(config) {
     Logger.info('Batch run starting…');
 
-    // Check if already applied before attempting to open the modal
-    const alreadyAppliedSel = ATS_CONFIGS[this.ats?.key]?.alreadyApplied;
+    // Check if already applied
+    const alreadyAppliedSel = ATS_CONFIGS[this.ats?.key]?.selectors?.alreadyApplied;
     if (alreadyAppliedSel && document.querySelector(alreadyAppliedSel)) {
       this._reportResult(config.jobId, false, 'Already applied to this position');
       return;
     }
 
-    // For LinkedIn, we must click Easy Apply first to open the modal
-    if (this.ats?.key === 'linkedin' || location.hostname.includes('linkedin.com')) {
-      const opened = await this._openLinkedInModal();
-      if (!opened) {
-        this._reportResult(config.jobId, false, 'Could not find or open Easy Apply button');
-        return;
-      }
+    // Click the Apply / Easy Apply button appropriate for this ATS
+    const opened = await this._openApplyModal();
+    if (!opened) {
+      this._reportResult(config.jobId, false, 'Could not find or open Apply button');
+      return;
     }
 
     await this.run({ batchMode: true, jobId: config.jobId });
   }
 
-  async _openLinkedInModal() {
-    Logger.info('Looking for Easy Apply button…');
-    const btn = await DOMUtils.waitForElement(
-      'button[aria-label*="Easy Apply" i], .jobs-apply-button--top-card, .jobs-s-apply button',
-      8000
-    ).catch(() => null);
+  // Generic "click Apply and wait for form" — works for any ATS
+  async _openApplyModal() {
+    const atsKey = this.ats?.key || '';
+    Logger.info(`Opening apply modal for ATS: ${atsKey || 'unknown'}`);
 
-    if (!btn) {
-      Logger.warn('Easy Apply button not found');
+    // ATS-specific apply button selectors (tried first)
+    const atsSel = ATS_CONFIGS[atsKey]?.selectors?.applyBtn;
+
+    // Generic apply button selectors
+    const genericSelectors = [
+      // LinkedIn Easy Apply
+      'button[aria-label*="Easy Apply" i]',
+      '.jobs-apply-button--top-card',
+      '.jobs-s-apply button',
+      // Generic "Apply" buttons used by most ATSes
+      'button[id*="apply" i]:not([id*="already" i]):not([id*="quick" i])',
+      'a[id*="apply" i]:not([id*="already" i])',
+      '[data-automation-id*="apply" i]',
+      '[class*="applyButton" i]',
+      '[class*="apply-button" i]',
+      // Oracle Cloud
+      '[id*="Apply" i][class*="oj"]',
+      // Workday
+      '[data-automation-id="applyNowButton"]',
+      // Greenhouse
+      '#btn-apply, .btn-apply, [class*="btn"][class*="apply"]',
+      // Lever
+      '.template-btn-submit, .postings-btn',
+    ].filter(Boolean);
+
+    const allSelectors = atsSel ? [atsSel, ...genericSelectors] : genericSelectors;
+
+    // Try each selector
+    let applyBtn = null;
+    for (const sel of allSelectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (el && !el.disabled) { applyBtn = el; break; }
+      } catch (_) {}
+    }
+
+    // Fallback: scan all buttons/links for "apply" text
+    if (!applyBtn) {
+      const candidates = Array.from(document.querySelectorAll(
+        'button:not([disabled]), a[href], [role="button"]:not([aria-disabled="true"])'
+      ));
+      applyBtn = candidates.find(el => {
+        const t = (el.textContent || el.getAttribute('aria-label') || el.title || '').toLowerCase().trim();
+        return /^apply now$|^apply$|^easy apply$|^apply for this job$|^apply for position$/.test(t);
+      });
+    }
+
+    if (!applyBtn) {
+      // If no apply button at all, the form may already be open — check if fields exist
+      const hasForm = DOMUtils.getInteractableFields().length > 2;
+      if (hasForm) { Logger.info('No apply button but form is already open'); return true; }
+      Logger.warn('No apply button found');
       return false;
     }
 
-    EventUtils.simulateClick(btn);
-    Logger.info('Clicked Easy Apply — waiting for modal…');
+    Logger.info(`Clicking apply button: "${(applyBtn.textContent || applyBtn.getAttribute('aria-label') || '').trim().slice(0, 50)}"`);
+    EventUtils.simulateClick(applyBtn);
 
-    const modal = await DOMUtils.waitForElement(
-      '.jobs-easy-apply-modal, .jobs-easy-apply-content, [data-test-modal]',
-      6000
-    ).catch(() => null);
+    // LinkedIn: wait for the Easy Apply modal specifically
+    if (atsKey === 'linkedin' || location.hostname.includes('linkedin.com')) {
+      const modal = await DOMUtils.waitForElement(
+        '.jobs-easy-apply-modal, .jobs-easy-apply-content, [data-test-modal]',
+        7000
+      ).catch(() => null);
+      if (!modal) { Logger.warn('LinkedIn modal did not open'); return false; }
+      Logger.success('LinkedIn Easy Apply modal opened');
+      await RetryUtils.sleep(800);
+      return true;
+    }
 
-    if (!modal) { Logger.warn('Modal did not open'); return false; }
-    Logger.success('Modal opened');
-    await RetryUtils.sleep(800);
-    return true;
+    // For other ATSes: wait for any new form fields to appear
+    await RetryUtils.sleep(1500);
+    const fields = DOMUtils.getInteractableFields();
+    if (fields.length > 0) { Logger.success(`Form ready — ${fields.length} fields`); return true; }
+
+    // Last chance: wait a bit more
+    await RetryUtils.sleep(2000);
+    return DOMUtils.getInteractableFields().length > 0;
   }
 
   // ── Interactive run (called by popup button or START_AUTOFILL message) ────
+  // Navigate-first: click Next until red errors appear, then fix only those fields.
   async run({ batchMode = false, jobId = null } = {}) {
     if (this.isRunning) { showToast('Already running…', 'warn'); return; }
 
-    this.profile   = await this._load();
+    this.profile = await this._load();
     if (!this.profile) {
       this._reportResult(jobId, false, 'Profile not configured');
       return;
@@ -652,23 +904,39 @@ class AutofillController {
     this.isRunning = true;
 
     if (!batchMode) showToast('JobFill started…', 'info', 2000);
-    Logger.info(`══ Run Started (${batchMode ? 'batch' : 'interactive'}) ══`);
+    Logger.info(`══ Run Started (${batchMode ? 'batch' : 'interactive'}, navigate-first) ══`);
 
     const filler  = new FormFiller(this.profile, this._jobInfo());
     const nav     = new StepNavigator(this.ats?.config);
     const confirm = new ConfirmationUI();
 
     try {
-      for (let step = 0; step < 20; step++) {
+      // Upload resume + agree terms on the initial page before any Next clicks
+      await new ResumeUploader(this.profile, this.ats?.key).upload();
+      if (this.ats?.key === 'workday')     await WorkdayDropdowns.fill(this.profile);
+      if (this.ats?.key === 'oraclecloud') await OracleCloudDropdowns.fill(this.profile);
+      this._autoAgreeTerms();
+
+      for (let step = 0; step < 25; step++) {
         Logger.info(`── Step ${step + 1} ──`);
-        await filler.fillAllFields();
-        await new ResumeUploader(this.profile, this.ats?.key).upload();
-        if (this.ats?.key === 'workday') await WorkdayDropdowns.fill(this.profile);
-        this._autoAgreeTerms(); // sweep for any unchecked agree/accept checkboxes
-        await RetryUtils.sleep(600);
+
+        // Fix any red error fields on the current step (from the previous Next click)
+        const errorFields = this._findErrorFields();
+        if (errorFields.length > 0) {
+          Logger.info(`Fixing ${errorFields.length} error field(s)…`);
+          showToast(`⚠️ Fixing ${errorFields.length} required field(s)…`, 'warn', 3000);
+          for (const f of errorFields) {
+            await filler.fillField(f);
+            await RetryUtils.sleep(filler._delay(filler.filledCount));
+          }
+          // Re-upload resume and re-agree terms in case a new step revealed those
+          await new ResumeUploader(this.profile, this.ats?.key).upload();
+          this._autoAgreeTerms();
+          await RetryUtils.sleep(400);
+        }
 
         if (nav.isAtFinalStep()) {
-          Logger.info('Final step');
+          Logger.info('Final step — handling submit');
 
           if (!batchMode) {
             showToast(`✅ ${filler.filledCount} fields filled — confirming…`, 'success', 3000);
@@ -676,9 +944,6 @@ class AutofillController {
           }
 
           let confirmed = true;
-
-          // Batch mode: always auto-submit (no dialog)
-          // Interactive mode: show dialog if requireConfirmation is on
           if (!batchMode && this.profile.requireConfirmation !== false) {
             confirmed = await confirm.show({
               jobInfo: this._jobInfo(),
@@ -691,9 +956,7 @@ class AutofillController {
             if (btn) {
               EventUtils.simulateClick(btn);
               Logger.success('Submitted');
-
               if (batchMode) {
-                // Wait briefly for submission to be processed
                 await RetryUtils.sleep(3000);
                 const err = this._detectErrors();
                 if (err) this._reportResult(jobId, false, `Submit error: ${err}`);
@@ -717,11 +980,11 @@ class AutofillController {
           break;
         }
 
+        // Click Next (without pre-filling — let the form tell us what it needs)
         const advanced = await nav.clickNext();
         if (!advanced) {
-          const msg = `No more steps found (${filler.filledCount} fields filled)`;
+          const msg = `No next step found (${filler.filledCount} fields filled)`;
           if (batchMode) {
-            // Check if there's a submit button we might have missed
             const sub = DOMUtils.findSubmitButton();
             if (sub) {
               EventUtils.simulateClick(sub);
@@ -731,12 +994,19 @@ class AutofillController {
               this._reportResult(jobId, false, 'Could not find next step or submit button');
             }
           } else {
-            showToast(`Form filled. ${msg}.`, 'success');
+            showToast(`Form complete. ${msg}.`, 'success');
           }
           break;
         }
 
+        // Wait for the new step to render before checking for errors
         await RetryUtils.sleep(2000);
+
+        // Upload resume + agree terms on each new step
+        await new ResumeUploader(this.profile, this.ats?.key).upload();
+        if (this.ats?.key === 'workday')     await WorkdayDropdowns.fill(this.profile);
+        if (this.ats?.key === 'oraclecloud') await OracleCloudDropdowns.fill(this.profile);
+        this._autoAgreeTerms();
       }
     } catch (e) {
       Logger.error('Run error:', e);
@@ -746,6 +1016,83 @@ class AutofillController {
       this.isRunning = false;
       Logger.info(`══ Done — filled:${filler.filledCount} skipped:${filler.skippedCount} ══`);
     }
+  }
+
+  // Find all form fields currently marked as invalid / showing a red error
+  _findErrorFields() {
+    const fields = [];
+    const seen   = new Set();
+
+    const add = (el) => {
+      if (!el || seen.has(el)) return;
+      const tag = el.tagName?.toLowerCase();
+      if (!['input','select','textarea'].includes(tag)) return;
+      if (el.type === 'hidden' || el.disabled) return;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) return;
+      seen.add(el);
+      fields.push(el);
+    };
+
+    // 1. aria-invalid="true" directly on the input
+    for (const el of document.querySelectorAll('[aria-invalid="true"]')) add(el);
+
+    // 2. Error message containers → find the associated input
+    const errorContainerSels = [
+      '.artdeco-inline-feedback--error',
+      '[class*="error-message"]',
+      '[class*="field-error"]',
+      '[class*="validation-error"]',
+      '[class*="validationError"]',
+      '[class*="input-error"]',
+      '[data-automation-id*="error"]',
+      '[role="alert"]',
+      '.form-error',
+      '.has-error',
+    ];
+    for (const sel of errorContainerSels) {
+      for (const errEl of document.querySelectorAll(sel)) {
+        if (!errEl.textContent.trim()) continue;
+        // Walk up to find a form-field container, then look for inputs within it
+        const container = errEl.closest(
+          '[class*="field"],[class*="form-group"],[class*="input-group"],fieldset,[data-automation-id]'
+        ) || errEl.parentElement;
+        if (container) {
+          for (const inp of container.querySelectorAll(
+            'input:not([type="hidden"]):not([disabled]),select:not([disabled]),textarea:not([disabled])'
+          )) add(inp);
+        }
+        // Also check the immediately preceding sibling element for an input
+        let prev = errEl.previousElementSibling;
+        while (prev) {
+          if (['INPUT','SELECT','TEXTAREA'].includes(prev.tagName)) { add(prev); break; }
+          const inp = prev.querySelector('input:not([type="hidden"]),select,textarea');
+          if (inp) { add(inp); break; }
+          prev = prev.previousElementSibling;
+        }
+      }
+    }
+
+    // 3. Red border via computed style (catches custom ATS error states)
+    for (const el of document.querySelectorAll(
+      'input:not([type="hidden"]):not([disabled]),select:not([disabled]),textarea:not([disabled])'
+    )) {
+      if (seen.has(el)) continue;
+      if (this._isRedBorder(window.getComputedStyle(el))) add(el);
+    }
+
+    return fields;
+  }
+
+  // Returns true if the computed border color is red-ish
+  _isRedBorder(style) {
+    const color = style.borderColor || style.borderTopColor || '';
+    const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (m) {
+      const [r, g, b] = [+m[1], +m[2], +m[3]];
+      return r > 150 && r > g * 2 && r > b * 2;
+    }
+    return false;
   }
 
   // Detect inline validation errors that indicate submission failed

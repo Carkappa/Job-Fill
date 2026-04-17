@@ -69,12 +69,42 @@ const FIELD_PATTERNS = {
       'customer success','customer support','account manager','client services',
       'operations manager','supply chain','logistics','procurement manager',
       'nurse','registered nurse','physical therapist','physician','pharmacist',
+      'nurse practitioner','physician assistant','medical assistant','radiologist','occupational therapist',
       'teacher','professor','instructor','curriculum developer','training specialist',
       'attorney','paralegal','legal counsel','compliance officer',
       'civil engineer','mechanical engineer','electrical engineer','structural engineer',
       'architect','interior designer','construction manager','project engineer',
       'executive assistant','administrative assistant','office manager','coordinator',
       'ceo','cto','cfo','vp engineering','director of','head of','vice president',
+      // AI / ML
+      'ai engineer','llm engineer','prompt engineer','computer vision engineer','nlp engineer',
+      'machine learning scientist','ai researcher','deep learning engineer','mlops engineer',
+      'generative ai engineer','applied scientist','research scientist',
+      // Cloud / Infra / DevOps
+      'cloud architect','solutions architect','infrastructure engineer','kubernetes engineer',
+      'network engineer','systems administrator','systems engineer','it administrator',
+      'database administrator','dba','storage engineer','reliability engineer',
+      // Security
+      'security engineer','cybersecurity analyst','penetration tester','security architect',
+      'information security analyst','soc analyst','devsecops engineer',
+      // Data
+      'analytics engineer','bi developer','business intelligence developer',
+      'data warehouse engineer','etl developer','bi analyst','reporting analyst',
+      // Mobile
+      'ios developer','android developer','mobile engineer','react native developer',
+      'flutter developer','mobile developer','swift developer','kotlin developer',
+      // QA / Testing
+      'qa engineer','test automation engineer','sdet','quality assurance engineer',
+      'software test engineer','qa analyst','automation engineer',
+      // Product / Design
+      'product designer','ux designer','interaction designer','visual designer',
+      'brand designer','motion designer','3d artist','game designer',
+      // Developer Relations / Writing
+      'developer advocate','developer relations','technical writer','developer evangelist',
+      'solutions engineer','sales engineer','support engineer','customer engineer',
+      // More management / agile
+      'technical program manager','scrum master','agile coach','delivery manager',
+      'release manager','it manager','it director','vp of product',
     ],
     autocomplete: ['organization-title'],
     profileKey: 'currentTitle',
@@ -104,10 +134,8 @@ const FIELD_PATTERNS = {
     ],
     profileKey: '_sponsorshipReverse', // handled specially in FormFiller
   },
-  salary:         { keywords: ['salary','expected salary','desired salary','target salary','compensation','expected compensation','salary expectation','annual salary','salary requirement','pay expectation'], profileKey: 'expectedSalary' },
   startDate:      { keywords: ['start date','available to start','availability','earliest start','when can you start','notice period','available from','date available'], profileKey: 'startDate' },
-  coverLetter:    { keywords: ['cover letter','covering letter','motivation letter','letter of intent','additional information','message to hiring','message to recruiter','why do you want','personal statement','why are you interested'], profileKey: 'coverLetter' },
-  summary:        { keywords: ['summary','about yourself','about you','bio','introduction','tell us about','professional summary','describe yourself','professional profile'], profileKey: 'summary' },
+  workHistory:    { keywords: ['work history','work experience','employment history','previous employment','job history','professional experience','experience summary','work background'], profileKey: 'workHistory' },
   skills:         { keywords: ['skills','key skills','technical skills','competencies','areas of expertise','core skills','skill set'], profileKey: 'skills' },
   languages:      { keywords: ['languages','language skills','spoken languages','language proficiency','languages spoken'], profileKey: 'languages' },
   certifications: { keywords: ['certifications','certificates','credentials','professional certifications','licenses'], profileKey: 'certifications' },
@@ -231,68 +259,147 @@ const ATS_CONFIGS = {
       resumeUpload: 'input[type="file"]',
     },
   },
+
+  oraclecloud: {
+    name: 'Oracle Cloud HCM',
+    detect: () =>
+      window.location.hostname.includes('oraclecloud.com') ||
+      (window.location.hostname.includes('oracle.com') &&
+        /\/apply|\/jobs|\/careers|candidate/i.test(window.location.href)) ||
+      !!document.querySelector('[class*="CandidateApply"],[class*="oj-form"],[data-oj-component]'),
+    selectors: {
+      form:         '[class*="CandidateApply"] form, [class*="candidateApply"] form, .oj-form, form',
+      nextBtn:      '[id*="Next" i], [id*="next" i], button[title*="Next" i], .oj-button[data-action*="next" i]',
+      submitBtn:    '[id*="Submit" i], [id*="submit" i], button[title*="Submit" i], button[type="submit"]',
+      resumeUpload: 'input[type="file"]',
+      applyBtn:     '[id*="Apply" i], button[title*="Apply" i], a[title*="Apply" i], .apply-button',
+    },
+  },
 };
 
 // ─── Field Matcher ────────────────────────────────────────────────────────────
 const FieldMatcher = {
   getLabelText(element) {
+    // 1. Explicit <label for="id"> — most reliable
     if (element.id) {
       const lbl = document.querySelector(`label[for="${CSS.escape(element.id)}"]`);
       if (lbl) return lbl.textContent.trim();
     }
+
+    // 2. aria-labelledby — but only use if it references a SINGLE element that is NOT
+    //    a section-container (Workday sets aria-labelledby to section headers like "Legal Name"
+    //    on every field inside that section, causing all fields to appear labelled identically).
     const lbId = element.getAttribute('aria-labelledby');
     if (lbId) {
-      const text = lbId.split(/\s+/).map(id => document.getElementById(id)?.textContent).filter(Boolean).join(' ');
-      if (text) return text.trim();
+      const ids = lbId.split(/\s+/);
+      // Only trust aria-labelledby when it references exactly one target that isn't a heading
+      // or when the target element is a <label> (not a <h2>/<div>/etc.)
+      if (ids.length === 1) {
+        const target = document.getElementById(ids[0]);
+        if (target && /^label$/i.test(target.tagName)) {
+          return target.textContent.trim();
+        }
+        // For non-label targets (span, div), only use if NOT a section/group header
+        // (i.e., the target is close to this element in the DOM, not a distant ancestor)
+        if (target && element.closest(`#${CSS.escape(ids[0])}`) === null) {
+          // The labelledby target is NOT an ancestor of this element → likely a true field label
+          const t = target.textContent.trim();
+          if (t) return t;
+        }
+      } else {
+        // Multiple ids → concatenate but be conservative
+        const text = ids.map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean).join(' ');
+        if (text) return text;
+      }
     }
+
+    // 3. aria-label directly on element
     const al = element.getAttribute('aria-label');
     if (al) return al.trim();
+
+    // 4. Wrapping <label>
     const wl = element.closest('label');
-    if (wl) return wl.textContent.trim();
+    if (wl) return wl.textContent.replace(element.value || '', '').trim();
+
+    // 5. Sibling <label> inside the immediate parent
     const pl = element.parentElement?.querySelector('label');
     if (pl) return pl.textContent.trim();
+
+    // 6. Preceding text node / sibling in direct parent (one level only — avoid section text)
     const parent = element.parentElement;
     if (parent) {
       const nodes = Array.from(parent.childNodes);
       for (let i = nodes.indexOf(element) - 1; i >= 0; i--) {
         const t = nodes[i].textContent?.trim();
-        if (t) return t;
+        if (t && t.length < 80) return t; // cap length to avoid grabbing paragraphs
       }
     }
+
+    // 7. placeholder as last resort
     return element.getAttribute('placeholder') || '';
   },
 
   matchElement(element) {
-    const signals = [
-      element.getAttribute('name')               || '',
-      element.getAttribute('id')                 || '',
-      element.getAttribute('placeholder')        || '',
-      element.getAttribute('aria-label')         || '',
-      element.getAttribute('autocomplete')       || '',
-      element.getAttribute('data-automation-id') || '',
-      element.getAttribute('data-field-id')      || '',
-      element.getAttribute('data-qa')            || '',
-      this.getLabelText(element),
+    // Score tiers:
+    //  4.0  autocomplete attribute — EXACT TOKEN match on the autocomplete attr only.
+    //       Critical: must NOT search all joined attrs, because "name" substring appears
+    //       inside "first name", "last name", "phone_number", etc. causing fullName to
+    //       win over firstName/lastName on virtually every field.
+    //  3.8  data-automation-id word boundary — Workday/Oracle field IDs are definitive.
+    //       "legalNameSection_firstName" → token "firstname" → firstName beats any label.
+    //  3.2  label text exact word boundary
+    //  2.8  label text substring
+    //  2.5  other attributes exact word boundary
+    //  1.5  substring anywhere (last resort)
+
+    const labelText    = this.getLabelText(element).toLowerCase().replace(/[-_]/g, ' ').trim();
+    const autoId       = (element.getAttribute('data-automation-id') || '').toLowerCase().replace(/[-_]/g, ' ');
+    // autocomplete is checked SEPARATELY to prevent substring false-positives
+    const acAttrValue  = (element.getAttribute('autocomplete') || '').toLowerCase();
+    const acTokens     = acAttrValue ? acAttrValue.split(/\s+/) : [];
+    // other attrs exclude autocomplete (already handled above)
+    const otherAttrs   = [
+      element.getAttribute('name')          || '',
+      element.getAttribute('id')            || '',
+      element.getAttribute('placeholder')   || '',
+      element.getAttribute('aria-label')    || '',
+      element.getAttribute('data-field-id') || '',
+      element.getAttribute('data-qa')       || '',
     ].join(' ').toLowerCase().replace(/[-_]/g, ' ');
+
+    const allSigs = `${autoId} ${labelText} ${otherAttrs}`;
 
     let bestType = null, bestScore = 0;
     for (const [fieldType, pat] of Object.entries(FIELD_PATTERNS)) {
       let score = 0;
-      if (pat.autocomplete) {
+
+      // Tier 4.0 — autocomplete EXACT TOKEN (e.g. autocomplete="given-name" → firstName only)
+      if (pat.autocomplete && acTokens.length) {
         for (const ac of pat.autocomplete) {
-          if (signals.includes(ac.toLowerCase())) score = Math.max(score, 3.0);
+          if (acTokens.includes(ac)) { score = Math.max(score, 4.0); break; }
         }
       }
+
       for (const kw of pat.keywords) {
-        if (signals.includes(kw)) {
-          const re = new RegExp(`\\b${kw.replace(/\s+/g, '\\s+')}\\b`);
-          score = Math.max(score, re.test(signals) ? 2.5 : 1.5);
-        }
+        const re = new RegExp(`\\b${kw.replace(/\s+/g, '\\s+')}\\b`);
+
+        // Tier 3.8 — data-automation-id word boundary (Workday, Oracle, iCIMS, etc.)
+        if (re.test(autoId))              score = Math.max(score, 3.8);
+
+        // Tier 3.2 / 2.8 — human-readable label text
+        if      (re.test(labelText))      score = Math.max(score, 3.2);
+        else if (labelText.includes(kw))  score = Math.max(score, 2.8);
+
+        // Tier 2.5 / 1.5 — remaining attributes
+        if      (re.test(otherAttrs))     score = Math.max(score, 2.5);
+        else if (allSigs.includes(kw))    score = Math.max(score, 1.5);
       }
+
       if (score > bestScore) { bestScore = score; bestType = fieldType; }
     }
+
     if (bestScore >= 1.5) {
-      Logger.log(`Field match [score=${bestScore.toFixed(1)}]: "${signals.slice(0, 60)}" → ${bestType}`);
+      Logger.log(`Field match [score=${bestScore.toFixed(1)}]: "${allSigs.slice(0, 70)}" → ${bestType}`);
       return { fieldType: bestType, score: bestScore };
     }
     return null;
@@ -308,17 +415,13 @@ const EventUtils = {
     try {
       const proto  = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+
+      // Focus first so React/Vue registers the interaction before we set the value
+      el.focus();
       if (setter) setter.call(el, value); else el.value = value;
-      el.dispatchEvent(new Event('input',    { bubbles: true, cancelable: true }));
-      el.dispatchEvent(new Event('change',   { bubbles: true, cancelable: true }));
-      el.dispatchEvent(new FocusEvent('blur',{ bubbles: true }));
-      // Verify value was actually set (React controlled inputs can revert)
-      if (value !== '' && el.value === '' && el.type !== 'password') {
-        Logger.warn(`setValue: value did not stick on ${el.id || el.name}, retrying`);
-        el.focus();
-        if (setter) setter.call(el, value); else el.value = value;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      }
+      el.dispatchEvent(new Event('input',  { bubbles: true, cancelable: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
       return true;
     } catch (e) { Logger.error('setValue', e); return false; }
   },
@@ -372,6 +475,17 @@ const EventUtils = {
       }
     }
 
+    // Pass 4: state abbreviation ↔ full name matching (e.g. "TX" stored, "Texas" in dropdown)
+    const stateVariants = Normalizers.stateVariants(value);
+    if (stateVariants.length > 1) {
+      for (const opt of sel.options) {
+        if (!opt.value) continue;
+        const t = opt.text.toLowerCase().trim();
+        const v = opt.value.toLowerCase().trim();
+        if (stateVariants.some(sv => t === sv || v === sv || t.includes(sv) || sv.includes(t))) return _set(opt);
+      }
+    }
+
     return false;
   },
 
@@ -420,6 +534,24 @@ const EventUtils = {
     }
 
     return false;
+  },
+
+  // Resolve a stored state value to match the form's expected format (abbr ↔ full name)
+  resolveStateValue(el, storedValue) {
+    if (!storedValue) return storedValue;
+    const variants = Normalizers.stateVariants(storedValue);
+    if (variants.length < 2) return storedValue;
+    // For SELECT elements, try each variant and pick whichever matches an option
+    if (el.tagName === 'SELECT') {
+      for (const v of variants) {
+        for (const opt of el.options) {
+          const t = opt.text.toLowerCase().trim();
+          const ov = opt.value.toLowerCase().trim();
+          if (t === v || ov === v) return opt.value; // return the option's actual value
+        }
+      }
+    }
+    return storedValue;
   },
 
   // Fill a <input type="date"> from a text value like "2024-06-15" or "immediately"
@@ -581,6 +713,33 @@ const RetryUtils = {
 
 // ─── Value Normalizers ────────────────────────────────────────────────────────
 const Normalizers = {
+  // US state full name → abbreviation
+  _STATE_MAP: {
+    'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+    'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+    'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA','kansas':'KS',
+    'kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD','massachusetts':'MA',
+    'michigan':'MI','minnesota':'MN','mississippi':'MS','missouri':'MO','montana':'MT',
+    'nebraska':'NE','nevada':'NV','new hampshire':'NH','new jersey':'NJ',
+    'new mexico':'NM','new york':'NY','north carolina':'NC','north dakota':'ND',
+    'ohio':'OH','oklahoma':'OK','oregon':'OR','pennsylvania':'PA','rhode island':'RI',
+    'south carolina':'SC','south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT',
+    'vermont':'VT','virginia':'VA','washington':'WA','west virginia':'WV',
+    'wisconsin':'WI','wyoming':'WY','district of columbia':'DC',
+  },
+
+  // Returns both the abbreviation and full name variants for a given state value
+  stateVariants(raw) {
+    if (!raw) return [];
+    const v = raw.trim().toLowerCase();
+    const abbr = this._STATE_MAP[v];         // "texas" → "TX"
+    if (abbr) return [abbr.toLowerCase(), v]; // ["tx", "texas"]
+    // Check if it's already an abbreviation
+    const full = Object.entries(this._STATE_MAP).find(([, a]) => a.toLowerCase() === v)?.[0];
+    if (full) return [v, full];              // ["tx", "texas"]
+    return [v];
+  },
+
   phone(raw) {
     if (!raw) return raw;
     const digits = raw.replace(/\D/g, '');

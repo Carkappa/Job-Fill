@@ -159,6 +159,9 @@
     .btn-fill:hover{background:linear-gradient(135deg,#0051a2,#002d7a)}
     .btn-fill:disabled{background:#94b8d0;box-shadow:none;cursor:not-allowed}
 
+    /* Position cards */
+    .pos-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 13px;margin-bottom:10px}
+
     ::-webkit-scrollbar{width:4px}
     ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:4px}
   </style>
@@ -180,6 +183,7 @@
   <button class="tab"        data-tab="queue">⚡ Queue <span id="queueBadge" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:2px"></span></button>
   <button class="tab"        data-tab="settings">⚙️</button>
   <button class="tab"        data-tab="log">🪵</button>
+  <button class="tab"        data-tab="history">📊</button>
 </div>
 
 <!-- ══ PROFILE ══ -->
@@ -223,11 +227,11 @@
 
 <!-- ══ WORK ══ -->
 <div class="panel" id="tab-work">
-  <div class="sec">Current Position</div>
-  <div class="fg"><label>Job Title</label>          <input type="text"   id="currentTitle"    placeholder="Software Engineer"></div>
-  <div class="fg"><label>Company</label>             <input type="text"   id="currentCompany"  placeholder="Acme Corp"></div>
-  <div class="fg"><label>Years of Experience</label> <input type="number" id="yearsExperience" placeholder="5" min="0" max="50"></div>
-  <div class="fg"><label>Work History</label><textarea id="workHistory" placeholder="Auto-parsed work history entries will appear here. Each entry separated by blank line." style="min-height:120px"></textarea></div>
+  <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
+    Positions
+    <button type="button" id="addPositionBtn" style="font-size:11px;font-weight:700;color:#0a66c2;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:3px 10px;cursor:pointer;text-transform:none;letter-spacing:0">+ Add Position</button>
+  </div>
+  <div id="positionsContainer"></div>
   <div class="sec">Education</div>
   <div class="fg"><label>School / University</label><input type="text" id="school" placeholder="UC Berkeley"></div>
   <div class="fg">
@@ -255,17 +259,12 @@
       <option value="Will require sponsorship">Will require sponsorship</option>
     </select>
   </div>
-  <div class="row">
-    <div class="fg"><label>Expected Salary</label><input type="text" id="expectedSalary" placeholder="$120,000"></div>
-    <div class="fg"><label>Start Date</label>      <input type="text" id="startDate"      placeholder="2 weeks"></div>
-  </div>
+  <div class="fg"><label>Start Date</label><input type="text" id="startDate" placeholder="2 weeks"></div>
   <div class="fg"><label>Skills</label><input type="text" id="skills" placeholder="JavaScript, React, Python…"></div>
   <div class="row">
     <div class="fg"><label>Languages</label>      <input type="text" id="languages"     placeholder="English, Spanish"></div>
     <div class="fg"><label>Certifications</label> <input type="text" id="certifications" placeholder="AWS, PMP…"></div>
   </div>
-  <div class="fg"><label>Summary</label><textarea id="summary" placeholder="2–3 sentence professional bio…"></textarea></div>
-  <div class="fg"><label>Cover Letter</label><textarea id="coverLetter" placeholder="Dear Hiring Manager…" style="min-height:80px"></textarea></div>
   <div class="fg"><label>How Did You Hear About Us</label><input type="text" id="referralSource" placeholder="LinkedIn…"></div>
   <div class="sec">EEO (Optional)</div>
   <div class="row">
@@ -374,6 +373,17 @@
   </div>
   <div class="log-list" id="logList">
     <div class="log-empty" id="logEmpty">No activity yet.</div>
+  </div>
+</div>
+
+<!-- ══ HISTORY ══ -->
+<div class="panel" id="tab-history">
+  <div class="log-toolbar">
+    <span>Application history</span>
+    <button class="io-btn" id="exportCsvBtn" style="flex:none;padding:5px 12px;font-size:11px;white-space:nowrap">⬇ Export CSV</button>
+  </div>
+  <div id="historyBody">
+    <div class="log-empty">No applications recorded yet.</div>
   </div>
 </div>
 
